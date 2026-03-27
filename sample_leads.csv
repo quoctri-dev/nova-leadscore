@@ -1,0 +1,11 @@
+Name,Email,Company,Title,Phone,Location,Source,Industry
+John Smith,john.smith@techcorp.com,TechCorp Inc,VP of Engineering,+1-555-0101,San Francisco,LinkedIn,Technology
+Sarah Chen,sarah.c@startup.io,DataFlow Startup,CEO & Founder,+1-555-0102,New York,Referral,SaaS
+Mike Johnson,mike@gmail.com,,Marketing Manager,,Austin,Website,
+Anna Williams,anna.w@enterprise.co,Global Enterprise Ltd,Director of Operations,+1-555-0104,London,Conference,Manufacturing
+,,Unknown Corp,,,,,
+David Lee,david.lee@acme.com,Acme Solutions,CTO,+1-555-0106,Seattle,LinkedIn,Technology
+Maria Garcia,,,Intern,,,,
+James Brown,james.b@bigco.com,BigCo Industries,Head of Sales,+1-555-0108,Chicago,Referral,Finance
+Lisa Park,lisa@freelance.net,,Freelancer,,Remote,Website,
+Tom Wilson,tom.w@scaleup.com,ScaleUp.com,VP Sales,+1-555-0110,Boston,LinkedIn,SaaS
