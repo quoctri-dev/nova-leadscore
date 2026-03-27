@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_cookies_controller import CookieController
+import streamlit.components.v1 as components
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -24,6 +24,47 @@ from validate import validate_dataframe
 # === DEMO LIMIT CONFIG ===
 DEMO_COOLDOWN_DAYS = 3
 DEMO_COOKIE_NAME = "leadscore_last_use"
+
+
+def _read_cookie_js() -> str:
+    """Inject JS to read demo cookie and push value into query params."""
+    return f"""
+    <script>
+    (function() {{
+        const name = "{DEMO_COOKIE_NAME}=";
+        const cookies = document.cookie.split(';');
+        for (let c of cookies) {{
+            c = c.trim();
+            if (c.indexOf(name) === 0) {{
+                const val = c.substring(name.length);
+                const url = new URL(window.parent.location);
+                if (url.searchParams.get('_ck') !== val) {{
+                    url.searchParams.set('_ck', val);
+                    window.parent.history.replaceState(null, '', url);
+                    window.parent.location.reload();
+                }}
+                break;
+            }}
+        }}
+    }})();
+    </script>
+    """
+
+
+def _set_cookie_js() -> str:
+    """Inject JS to set demo cookie with 3-day expiry."""
+    max_age = DEMO_COOLDOWN_DAYS * 86400
+    return f"""
+    <script>
+    (function() {{
+        const now = new Date().toISOString();
+        document.cookie = "{DEMO_COOKIE_NAME}=" + now + ";max-age={max_age};path=/;SameSite=Lax";
+        const url = new URL(window.parent.location);
+        url.searchParams.set('_ck', now);
+        window.parent.history.replaceState(null, '', url);
+    }})();
+    </script>
+    """
 
 # === PAGE CONFIG ===
 st.set_page_config(
@@ -164,18 +205,21 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# === CONFIG + COOKIE CONTROLLER ===
+# === CONFIG ===
 config = get_config()
-controller = CookieController()
 
-# === DEMO LIMIT CHECK ===
+# === DEMO LIMIT CHECK (JS cookie via query params bridge) ===
 demo_blocked = False
 demo_remaining = ""
 
-last_use_raw = controller.get(DEMO_COOKIE_NAME)
-if last_use_raw:
+# Inject JS to read cookie → push into query params
+components.html(_read_cookie_js(), height=0)
+
+# Read cookie value from query params (bridged by JS)
+cookie_val = st.query_params.get("_ck", "")
+if cookie_val:
     try:
-        last_use_dt = datetime.fromisoformat(str(last_use_raw))
+        last_use_dt = datetime.fromisoformat(str(cookie_val))
         cooldown_end = last_use_dt + timedelta(days=DEMO_COOLDOWN_DAYS)
         now = datetime.now(timezone.utc)
         if now < cooldown_end:
@@ -278,12 +322,8 @@ if uploaded:
                 )
             elif st.button("🎯 Score My Leads", type="primary", use_container_width=True):
                 run_scoring(df, uploaded.name)
-                # Set demo cookie (3-day cooldown)
-                controller.set(
-                    DEMO_COOKIE_NAME,
-                    datetime.now(timezone.utc).isoformat(),
-                    max_age=DEMO_COOLDOWN_DAYS * 86400,
-                )
+                # Set demo cookie (3-day cooldown) via JS
+                components.html(_set_cookie_js(), height=0)
 
     except Exception as e:
         st.error(f"Could not read file: {e}")
