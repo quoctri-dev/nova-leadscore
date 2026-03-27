@@ -5,11 +5,13 @@ Upload CSV/Excel → AI scores leads → Dashboard + Download.
 
 import io
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from streamlit_cookies_controller import CookieController
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -18,6 +20,10 @@ from config import get_config
 from core.detector import detect_leads
 from core.scorer import score_leads
 from validate import validate_dataframe
+
+# === DEMO LIMIT CONFIG ===
+DEMO_COOLDOWN_DAYS = 3
+DEMO_COOKIE_NAME = "leadscore_last_use"
 
 # === PAGE CONFIG ===
 st.set_page_config(
@@ -158,9 +164,40 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# === DEMO NOTICE (Streamlit Cloud) ===
+# === CONFIG + COOKIE CONTROLLER ===
 config = get_config()
-if not config.llm_api_key:
+controller = CookieController()
+
+# === DEMO LIMIT CHECK ===
+demo_blocked = False
+demo_remaining = ""
+
+last_use_raw = controller.get(DEMO_COOKIE_NAME)
+if last_use_raw:
+    try:
+        last_use_dt = datetime.fromisoformat(str(last_use_raw))
+        cooldown_end = last_use_dt + timedelta(days=DEMO_COOLDOWN_DAYS)
+        now = datetime.now(timezone.utc)
+        if now < cooldown_end:
+            demo_blocked = True
+            remaining = cooldown_end - now
+            hours_left = int(remaining.total_seconds() // 3600)
+            if hours_left >= 24:
+                demo_remaining = f"{hours_left // 24}d {hours_left % 24}h"
+            else:
+                demo_remaining = f"{hours_left}h"
+    except (ValueError, TypeError):
+        pass  # invalid cookie → allow usage
+
+# === DEMO NOTICE ===
+if demo_blocked:
+    st.markdown(f"""
+    <div class="demo-banner">
+        <strong>Demo Limit</strong> — You've used your free trial. Next available in <strong>{demo_remaining}</strong>.
+        Want unlimited access? <a href="https://novasentio.com" style="color:var(--accent)">Contact us</a>.
+    </div>
+    """, unsafe_allow_html=True)
+elif not config.llm_api_key:
     st.markdown("""
     <div class="demo-banner">
         <strong>Demo Mode</strong> — AI scoring uses rule-based fallback. Add your API key for full AI analysis.
@@ -234,8 +271,19 @@ if uploaded:
             with st.expander(f"📋 Preview: {uploaded.name} ({len(df)} leads, {len(df.columns)} columns)", expanded=False):
                 st.dataframe(df.head(10), use_container_width=True)
 
-            if st.button("🎯 Score My Leads", type="primary", use_container_width=True):
+            if demo_blocked:
+                st.button(
+                    f"⏳ Demo limit — try again in {demo_remaining}",
+                    type="secondary", use_container_width=True, disabled=True,
+                )
+            elif st.button("🎯 Score My Leads", type="primary", use_container_width=True):
                 run_scoring(df, uploaded.name)
+                # Set demo cookie (3-day cooldown)
+                controller.set(
+                    DEMO_COOKIE_NAME,
+                    datetime.now(timezone.utc).isoformat(),
+                    max_age=DEMO_COOLDOWN_DAYS * 86400,
+                )
 
     except Exception as e:
         st.error(f"Could not read file: {e}")
