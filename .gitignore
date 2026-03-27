@@ -5,3 +5,8 @@ __pycache__/
 *.log
 *.DS_Store
 output/
+
+# Internal project files (NOT for public repo)
+CONTINUITY.md
+spec.md
+*.internal.md
